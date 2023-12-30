@@ -1,6 +1,8 @@
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <map>
 #include <memory>
 #include <string>
@@ -28,18 +30,24 @@ enum Token {
 static std::string IdentifierStr;  // Filled in if tok_identifier
 static double NumVal;			   // Filled in if tok_number
 
+std::ifstream file;
+
 /// gettok - Return the next token from standard input.
-static int gettok() {
-	static int LastChar = ' ';
+static char gettok() {
+	static char LastChar = ' ';
 
 	// Skip any whitespace.
 	while (isspace(LastChar))
-		LastChar = getchar();
+
+		file.get(LastChar);
 
 	if (isalpha(LastChar)) {  // identifier: [a-zA-Z][a-zA-Z0-9]*
 		IdentifierStr = LastChar;
-		while (isalnum((LastChar = getchar())))
+		file.get(LastChar);
+		while (isalnum(LastChar)) {
 			IdentifierStr += LastChar;
+			file.get(LastChar);
+		}
 
 		if (IdentifierStr == "def")
 			return tok_def;
@@ -52,7 +60,7 @@ static int gettok() {
 		std::string NumStr;
 		do {
 			NumStr += LastChar;
-			LastChar = getchar();
+			file.get(LastChar);
 		} while (isdigit(LastChar) || LastChar == '.');
 
 		NumVal = strtod(NumStr.c_str(), nullptr);
@@ -62,20 +70,20 @@ static int gettok() {
 	if (LastChar == '#') {
 		// Comment until end of line.
 		do
-			LastChar = getchar();
-		while (LastChar != EOF && LastChar != '\n' && LastChar != '\r');
+			file.get(LastChar);
+		while (!file.eof() && LastChar != '\n' && LastChar != '\r');
 
-		if (LastChar != EOF)
+		if (!file.eof())
 			return gettok();
 	}
 
 	// Check for end of file.  Don't eat the EOF.
-	if (LastChar == EOF)
+	if (file.eof())
 		return tok_eof;
 
 	// Otherwise, just return the character as its ascii value.
-	int ThisChar = LastChar;
-	LastChar = getchar();
+	char ThisChar = LastChar;
+	file.get(LastChar);
 	return ThisChar;
 }
 
@@ -403,7 +411,7 @@ static void HandleTopLevelExpression() {
 /// top ::= definition | external | expression | ';'
 static void MainLoop() {
 	while (true) {
-		fprintf(stderr, "ready> ");
+		// fprintf(stderr, "ready> ");
 		switch (CurTok) {
 			case tok_eof:
 				return;
@@ -427,20 +435,53 @@ static void MainLoop() {
 // Main driver code.
 //===----------------------------------------------------------------------===//
 
-int main() {
+int main(int argc, char* argv[]) {
+	const std::string extension = ".tp";
+	if (argc == 1) {
+		// No file specified
+		// compile all files with file extension
+
+		// Find all files in the current path with the extension
+		for (const auto& entry : std::filesystem::directory_iterator(std::filesystem::current_path())) {
+			if (entry.path().extension().compare(extension) == 0) {
+				// Open the file
+				file = std::ifstream(entry.path());
+				if (!file.is_open()) printf("Failed to open %s\n", entry.path().c_str());
+
+				getNextToken();
+
+				// Run the main "interpreter loop" now.
+				MainLoop();
+
+				if (file.is_open()) file.close();
+			}
+		}
+	} else {
+		for (size_t i = 1; i < argc - 1; i++) {
+			// Open argv[i]
+			// compile argv[i]
+		}
+	}
 	// Install standard binary operators.
 	// 1 is lowest precedence.
-	BinopPrecedence['<'] = 10;
-	BinopPrecedence['+'] = 20;
-	BinopPrecedence['-'] = 20;
-	BinopPrecedence['*'] = 40;	// highest.
+	// BinopPrecedence['<'] = 10;
+	// BinopPrecedence['+'] = 20;
+	// BinopPrecedence['-'] = 20;
+	// BinopPrecedence['*'] = 40;	// highest.
 
-	// Prime the first token.
-	fprintf(stderr, "ready> ");
-	getNextToken();
+	// // Prime the first token.
+	// fprintf(stderr, "ready> ");
+	// getNextToken();
 
-	// Run the main "interpreter loop" now.
-	MainLoop();
+	// // Run the main "interpreter loop" now.
+	// MainLoop();
 
-	return 0;
+	// return 0;
 }
+
+/*
+# Compile
+clang++ -g -O3 linter.cpp `llvm-config --cxxflags`
+# Run
+./a.out
+*/
