@@ -1,3 +1,5 @@
+#include <stdarg.h>
+
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
@@ -34,7 +36,7 @@ enum Token {
 	tok_eof = -1,
 
 	// commands
-	tok_def = -2,
+	tok_function = -2,
 	tok_extern = -3,
 
 	// primary
@@ -64,7 +66,7 @@ static char gettok() {
 		}
 
 		if (dreamberd::is_function_definition(IdentifierStr))
-			return tok_def;
+			return tok_function;
 		if (IdentifierStr == "extern")
 			return tok_extern;
 		return tok_identifier;
@@ -91,7 +93,7 @@ static char gettok() {
 			return gettok();
 	}
 
-	// Check for end of file.  Don't eat the EOF.
+	// Check for end of file.
 	if (file.eof())
 		return tok_eof;
 
@@ -215,13 +217,21 @@ static int GetTokPrecedence() {
 }
 
 /// LogError* - These are little helper functions for error handling.
-std::unique_ptr<ExprAST> LogError(const char* Str) {
-	printf("Error: %s\n", Str);
+std::unique_ptr<ExprAST> LogError(const char* fmt, ...) {
+	printf("Error: ");
+	va_list args;
+	va_start(args, fmt);
+	printf(fmt, args);
+	va_end(args);
+	printf("\n");
 	return nullptr;
 }
 
-std::unique_ptr<PrototypeAST> LogErrorP(const char* Str) {
-	LogError(Str);
+std::unique_ptr<PrototypeAST> LogErrorP(const char* fmt, ...) {
+	va_list args;
+	va_start(args, fmt);
+	LogError(fmt, args);
+	va_end(args);
 	return nullptr;
 }
 
@@ -242,7 +252,7 @@ static std::unique_ptr<ExprAST> ParseParenExpr() {
 		return nullptr;
 
 	if (CurTok != ')')
-		return LogError("expected ')'");
+		return LogError("expected ')', read %c", CurTok);
 	getNextToken();	 // eat ).
 	return V;
 }
@@ -272,7 +282,7 @@ static std::unique_ptr<ExprAST> ParseIdentifierExpr() {
 				break;
 
 			if (CurTok != ',')
-				return LogError("Expected ')' or ',' in argument list");
+				return LogError("Expected ')' or ',' in argument list, read %i", CurTok);
 			getNextToken();
 		}
 	}
@@ -289,14 +299,14 @@ static std::unique_ptr<ExprAST> ParseIdentifierExpr() {
 ///   ::= parenexpr
 static std::unique_ptr<ExprAST> ParsePrimary() {
 	switch (CurTok) {
-		default:
-			return LogError("unknown token when expecting an expression");
 		case tok_identifier:
 			return ParseIdentifierExpr();
 		case tok_number:
 			return ParseNumberExpr();
 		case '(':
 			return ParseParenExpr();
+		default:
+			return LogError("unknown token %i when expecting an expression", CurTok);
 	}
 }
 
@@ -350,19 +360,19 @@ static std::unique_ptr<ExprAST> ParseExpression() {
 ///   ::= id '(' id* ')'
 static std::unique_ptr<PrototypeAST> ParsePrototype() {
 	if (CurTok != tok_identifier)
-		return LogErrorP("Expected function name in prototype");
+		return LogErrorP("Expected function name in prototype but got %i", CurTok);
 
 	std::string FnName = IdentifierStr;
 	getNextToken();
 
 	if (CurTok != '(')
-		return LogErrorP("Expected '(' in prototype");
+		return LogErrorP("Expected '(' in prototype but got %i", CurTok);
 
 	std::vector<std::string> ArgNames;
 	while (getNextToken() == tok_identifier)
 		ArgNames.push_back(IdentifierStr);
 	if (CurTok != ')')
-		return LogErrorP("Expected ')' in prototype");
+		return LogErrorP("Expected ')' in prototype but got %i", CurTok);
 
 	// success.
 	getNextToken();	 // eat ')'.
@@ -407,8 +417,11 @@ static std::unique_ptr<Module> TheModule;
 static std::unique_ptr<IRBuilder<>> Builder;
 static std::map<std::string, Value*> NamedValues;
 
-Value* LogErrorV(const char* Str) {
-	LogError(Str);
+Value* LogErrorV(const char* fmt, ...) {
+	va_list args;
+	va_start(args, fmt);
+	LogError(fmt, args);
+	va_end(args);
 	return nullptr;
 }
 
@@ -420,7 +433,7 @@ Value* VariableExprAST::codegen() {
 	// Look this variable up in the function.
 	Value* V = NamedValues[Name];
 	if (!V)
-		return LogErrorV("Unknown variable name");
+		return LogErrorV("Unknown variable name %s", Name.c_str());
 	return V;
 }
 
@@ -442,7 +455,7 @@ Value* BinaryExprAST::codegen() {
 			// Convert bool 0/1 to double 0.0 or 1.0
 			return Builder->CreateUIToFP(L, Type::getDoubleTy(*TheContext), "booltmp");
 		default:
-			return LogErrorV("invalid binary operator");
+			return LogErrorV("invalid binary operator %c", Op);
 	}
 }
 
@@ -450,11 +463,11 @@ Value* CallExprAST::codegen() {
 	// Look up the name in the global module table.
 	Function* CalleeF = TheModule->getFunction(Callee);
 	if (!CalleeF)
-		return LogErrorV("Unknown function referenced");
+		return LogErrorV("Unknown function %s referenced", Callee.c_str());
 
 	// If argument mismatch error.
 	if (CalleeF->arg_size() != Args.size())
-		return LogErrorV("Incorrect # arguments passed");
+		return LogErrorV("Incorrect # arguments passed, expected %u, passed %u", Args.size(), CalleeF->arg_size());
 
 	std::vector<Value*> ArgsV;
 	for (unsigned i = 0, e = Args.size(); i != e; ++i) {
@@ -577,7 +590,7 @@ static void MainLoop() {
 			case ';':  // ignore top-level semicolons.
 				getNextToken();
 				break;
-			case tok_def:
+			case tok_function:
 				HandleDefinition();
 				break;
 			case tok_extern:
