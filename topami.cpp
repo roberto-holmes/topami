@@ -81,7 +81,7 @@ static char gettok() {
 		return tok_number;
 	}
 
-	if (LastChar == '#') {
+	if (LastChar == '/' && file.peek() == '/') {
 		// Comment until end of line.
 		do
 			file.get(LastChar);
