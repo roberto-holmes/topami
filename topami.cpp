@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "dreamberd.hpp"
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/IR/BasicBlock.h"
@@ -62,7 +63,7 @@ static char gettok() {
 			file.get(LastChar);
 		}
 
-		if (IdentifierStr == "def")
+		if (dreamberd::is_function_definition(IdentifierStr))
 			return tok_def;
 		if (IdentifierStr == "extern")
 			return tok_extern;
@@ -642,7 +643,7 @@ int main(int argc, char* argv[]) {
 
 /*
 # Compile
-clang++ -g -O3 topami.cpp `llvm-config --cxxflags --ldflags --system-libs --libs core` -o topami
+clang++ -g -O3 topami.cpp dreamberd.cpp -I. `llvm-config --cxxflags --ldflags --system-libs --libs core` -o topami
 # Run and save IR to file (by redirect stderr)
 ./topami 2> ./topami.ll
 */
