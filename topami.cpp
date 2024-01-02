@@ -1302,5 +1302,5 @@ clang++ -g -O3 topami.cpp dreamberd.cpp -I. `llvm-config --cxxflags --ldflags --
 # Run and save IR to file (by redirect stderr)
 ./topami 2> ./topami.ll
 # Build with a C++ main
-clang++ main.cpp test.o -o topami
+clang++ main.cpp test.o -o main
 */
