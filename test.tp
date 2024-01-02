@@ -1,2 +1,2 @@
 // fasg
-fo test(x) 1+2+x;
+fn average(x y) (x + y) * 0.5;

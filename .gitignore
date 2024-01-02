@@ -1,3 +1,4 @@
-linter
+main
 topami
-topami.ll
+*.o
+*.ll
